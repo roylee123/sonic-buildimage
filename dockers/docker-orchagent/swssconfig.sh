@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 
-function config_acl {
-    if [ -f "/etc/sonic/acl.json" ]; then
-        mkdir -p /etc/swss/config.d/acl
-        rm -rf /etc/swss/config.d/acl/*
-        translate_acl -m /etc/sonic/minigraph.xml -o /etc/swss/config.d/acl /etc/sonic/acl.json
-        for filename in /etc/swss/config.d/acl/*.json; do
-            [ -e "$filename" ] || break
-            swssconfig $filename
-        done
-    fi
-}
+set -e
 
 function fast_reboot {
   case "$(cat /proc/cmdline)" in
@@ -32,29 +22,37 @@ function fast_reboot {
   esac
 }
 
-
 # Restore FDB and ARP table ASAP
 fast_reboot
 
+<<<<<<< HEAD
 HWSKU=`sonic-cfggen -m /etc/sonic/minigraph.xml -d -v "DEVICE_METADATA['localhost']['hwsku']"`
+=======
+HWSKU=`sonic-cfggen -d -v "DEVICE_METADATA['localhost']['hwsku']"`
 
-SWSSCONFIG_ARGS="00-copp.config.json ipinip.json mirror.json ports.json "
+SWSSCONFIG_ARGS="00-copp.config.json "
+>>>>>>> 6453b3ac1b961bbff5b608bc29f23708cabfcf70
+
+if [ "$HWSKU" != "montara" ] && [ "$HWSKU" != "mavericks" ] && [ "$HWSKU" != "OSW1800-48x6q" ] && [ "$HWSKU" != "INGRASYS-S9180-32X"]; then
+    SWSSCONFIG_ARGS+="ipinip.json "
+fi
+
+SWSSCONFIG_ARGS+="ports.json switch.json "
 
 if [ "$HWSKU" == "Force10-S6000" ]; then
     SWSSCONFIG_ARGS+="td2.32ports.buffers.json td2.32ports.qos.json "
 elif [ "$HWSKU" == "Force10-S6000-Q32" ]; then
     SWSSCONFIG_ARGS+="td2.32ports.buffers.json td2.32ports.qos.json "
+elif [ "$HWSKU" == "Force10-S6100" ]; then
+    SWSSCONFIG_ARGS+="th.64ports.buffers.json th.64ports.qos.json "
 elif [ "$HWSKU" == "Arista-7050-QX32" ]; then
     SWSSCONFIG_ARGS+="td2.32ports.buffers.json td2.32ports.qos.json "
-elif [ "$HWSKU" == "ACS-MSN2700" ]; then
-    SWSSCONFIG_ARGS+="msn2700.32ports.buffers.json msn2700.32ports.qos.json "
-elif [ "$HWSKU" == "ACS-MSN2740" ]; then
-    SWSSCONFIG_ARGS+="msn2740.32ports.buffers.json msn2740.32ports.qos.json "
+elif [[ "$HWSKU" == "ACS-MSN27"* ]]; then
+    sonic-cfggen -d -t /usr/share/sonic/templates/msn27xx.32ports.buffers.json.j2 > /etc/swss/config.d/msn27xx.32ports.buffers.json
+    SWSSCONFIG_ARGS+="msn27xx.32ports.buffers.json "
 fi
 
 for file in $SWSSCONFIG_ARGS; do
     swssconfig /etc/swss/config.d/$file
     sleep 1
 done
-
-config_acl

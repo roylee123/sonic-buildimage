@@ -406,7 +406,7 @@ if [ "$install_env" = "onie" ]; then
     
 elif [ "$install_env" = "sonic" ]; then
     demo_mnt="/host"
-    running_sonic_revision=$(cat /etc/sonic/sonic_version.yml | grep build_version | cut -f2 -d" ")
+    eval running_sonic_revision=$(cat /etc/sonic/sonic_version.yml | grep build_version | cut -f2 -d" ")
     # Prevent installing existing SONiC if it is running
     if [ "$image_dir" = "image-$running_sonic_revision" ]; then
         echo "Error: Unable to install SONiC version $running_sonic_revision. Running SONiC has the same version"
@@ -423,7 +423,7 @@ else
     demo_mnt="build_raw_image_mnt"
     demo_dev=$cur_wd/"%%OUTPUT_RAW_IMAGE%%"
 
-    mkfs.ext4 $demo_dev
+    mkfs.ext4 -L $demo_volume_label $demo_dev
 
     echo "Mounting $demo_dev on $demo_mnt..."
     mkdir $demo_mnt
@@ -455,9 +455,9 @@ if [ "$install_env" = "onie" ]; then
     cp /etc/machine.conf $demo_mnt
 
     # Store installation log in target file system
-    rm -f $onie_initrd_tmp/tmp/onie-support.tar.bz2
+    rm -f $onie_initrd_tmp/tmp/onie-support*.tar.bz2
     ${onie_bin} onie-support /tmp
-    mv $onie_initrd_tmp/tmp/onie-support.tar.bz2 $demo_mnt/$image_dir/
+    mv $onie_initrd_tmp/tmp/onie-support*.tar.bz2 $demo_mnt/$image_dir/
 
     if [ "$firmware" = "uefi" ] ; then
         demo_install_uefi_grub "$demo_mnt" "$blk_dev"
@@ -535,6 +535,12 @@ if [ "$install_env" = "sonic" ]; then
     onie_menuentry=$(cat /host/grub/grub.cfg | sed "/menuentry ONIE/,/}/!d")
 fi
 
+if [ "$install_env" = "build" ]; then
+    grub_cfg_root=%%SONIC_ROOT%%
+else
+    grub_cfg_root=$demo_dev
+fi
+
 cat <<EOF >> $grub_cfg
 menuentry '$demo_grub_entry' {
         search --no-floppy --label --set=root $demo_volume_label
@@ -543,7 +549,7 @@ menuentry '$demo_grub_entry' {
         if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi
         insmod part_msdos
         insmod ext2
-        linux   /$image_dir/boot/vmlinuz-3.16.0-4-amd64 root=$demo_dev rw $GRUB_CMDLINE_LINUX  \
+        linux   /$image_dir/boot/vmlinuz-3.16.0-4-amd64 root=$grub_cfg_root rw $GRUB_CMDLINE_LINUX  \
                 loop=$image_dir/$FILESYSTEM_SQUASHFS loopfstype=squashfs                       \
                 apparmor=1 security=apparmor varlog_size=$VAR_LOG_SIZE $ONIE_PLATFORM_EXTRA_CMDLINE_LINUX
         echo    'Loading $demo_volume_label $demo_type initial ramdisk ...'
@@ -564,6 +570,7 @@ EOF
 fi
 
 if [ "$install_env" = "build" ]; then
+    cp $grub_cfg $demo_mnt/grub.cfg
     umount $demo_mnt
 else
     cp $grub_cfg $onie_initrd_tmp/$demo_mnt/grub/grub.cfg

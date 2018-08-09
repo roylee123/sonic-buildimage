@@ -17,10 +17,12 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 	# Apply patch
 	git apply ../0001-libteam-Add-team_get_port_enabled-function.patch
 	git apply ../0002-libteam-Temporarily-remove-redundant-debug-mes.patch
+	git apply ../0003-teamd-lacp-runner-will-send-lacp-update-right-after-.patch
+	git apply ../0004-libteam-Add-lacp-fallback-support-for-single-member-.patch
 	popd
 
 	# Obtain debian packaging
-	git clone https://anonscm.debian.org/git/collab-maint/libteam.git tmp
+	git clone https://salsa.debian.org/debian/libteam.git tmp
 	pushd ./tmp
 	git checkout -f da006f2 # v1.26
 	popd

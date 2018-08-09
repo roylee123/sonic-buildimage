@@ -16,3 +16,7 @@ $(DOCKER_ORCHAGENT_NEPHOS)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
 $(DOCKER_ORCHAGENT_NEPHOS)_RUN_OPT += -v /var/log/swss:/var/log/swss:rw
 
 $(DOCKER_ORCHAGENT_NEPHOS)_BASE_IMAGE_FILES += swssloglevel:/usr/bin/swssloglevel
+<<<<<<< HEAD
+=======
+$(DOCKER_ORCHAGENT_NEPHOS)_FILES += $(ARP_UPDATE_SCRIPT)
+>>>>>>> 6453b3ac1b961bbff5b608bc29f23708cabfcf70

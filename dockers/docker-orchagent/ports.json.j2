@@ -5,7 +5,8 @@
 {% if PORT[port].has_key('speed') %}
     {% if ns.firstPrinted %},{% endif %}{
         "PORT_TABLE:{{ port }}": {
-            "speed": "{{ PORT[port]['speed'] }}"
+            "speed": "{{ PORT[port]['speed'] }}",
+            "description": "{{ PORT[port]['description'] }}"
         },
         "OP": "SET"
     }{% if ns.update({'firstPrinted': True}) %} {% endif %}

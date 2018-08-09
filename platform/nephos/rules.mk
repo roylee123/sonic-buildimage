@@ -7,7 +7,11 @@ include $(PLATFORM_PATH)/docker-syncd-nephos-rpc.mk
 include $(PLATFORM_PATH)/one-image.mk
 include $(PLATFORM_PATH)/libsaithrift-dev.mk
 include $(PLATFORM_PATH)/python-saithrift.mk
+<<<<<<< HEAD
 include $(PLATFORM_PATH)/docker-ptf-nephos.mk
+=======
+#include $(PLATFORM_PATH)/docker-ptf-nephos.mk
+>>>>>>> 6453b3ac1b961bbff5b608bc29f23708cabfcf70
 
 NPX_DIAG = npx_diag
 $(NPX_DIAG)_URL = "https://github.com/NephosInc/SONiC/raw/master/sdk/npx_diag_2.0.1-20171020"
@@ -17,6 +21,7 @@ $(DSSERVE)_URL = "https://sonicstorage.blob.core.windows.net/packages/20170518/d
 
 SONIC_ONLINE_FILES += $(NPX_DIAG) $(DSSERVE)
 
+<<<<<<< HEAD
 SONIC_ALL += $(SONIC_ONE_IMAGE) \
              $(DOCKER_FPM) \
              $(DOCKER_PTF_NEPHOS) \
@@ -24,6 +29,12 @@ SONIC_ALL += $(SONIC_ONE_IMAGE) \
 
 # Inject nephos sai into sairedis
 $(LIBSAIREDIS)_DEPENDS += $(NEPHOS_SAI) $(NEPHOS_SAI_DEV) $(LIBSAITHRIFT_DEV_NEPHOS)
+=======
+SONIC_ALL += $(SONIC_ONE_IMAGE) $(DOCKER_FPM)
+
+# Inject nephos sai into sairedis
+$(LIBSAIREDIS)_DEPENDS += $(NEPHOS_SAI) $(NEPHOS_SAI_DEV) #$(LIBSAITHRIFT_DEV_NEPHOS)
+>>>>>>> 6453b3ac1b961bbff5b608bc29f23708cabfcf70
 
 # Runtime dependency on nephos sai is set only for syncd
 $(SYNCD)_RDEPENDS += $(NEPHOS_SAI)
