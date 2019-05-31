@@ -193,7 +193,6 @@ kos = [
 'depmod -ae',
 'modprobe i2c_dev',
 'modprobe i2c_mux_pca954x force_deselect_on_exit=1',
-#'modprobe i2c_mux_pca954x',
 'modprobe optoe',
 'modprobe minipack_psensor']
 

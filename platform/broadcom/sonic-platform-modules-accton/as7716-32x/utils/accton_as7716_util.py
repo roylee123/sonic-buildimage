@@ -256,7 +256,7 @@ def driver_inserted():
 kos = [
 'depmod -ae',
 'modprobe i2c_dev',
-'modprobe i2c_mux_pca954x',
+'modprobe i2c_mux_pca954x force_deselect_on_exit=1',
 'modprobe accton_i2c_cpld',
 'modprobe cpr_4011_4mxx',
 'modprobe ym2651y',
