@@ -11,6 +11,9 @@ try:
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
+#from xcvrd
+SFP_STATUS_REMOVED = '0'
+SFP_STATUS_INSERTED = '1'
 
 class SfpUtil(SfpUtilBase):
     """Platform-specific SfpUtil class"""
@@ -118,7 +121,6 @@ class SfpUtil(SfpUtilBase):
         for x in range(self.port_start, self.port_end+1):
             self.port_to_eeprom_mapping[x] = eeprom_path.format(
                 self._port_to_i2c_mapping[x])
-
         SfpUtilBase.__init__(self)
 
     def get_cpld_num(self, port_num):             
@@ -230,16 +232,67 @@ class SfpUtil(SfpUtilBase):
             return False
 
         reg_value = '0'
-
         reg_file.write(reg_value)
         reg_file.close()
-        
         return True
 
-    def get_transceiver_change_event(self):
-        """
-        TODO: This function need to be implemented
-        when decide to support monitoring SFP(Xcvrd)
-        on this platform.
-        """
-        raise NotImplementedError
+    @property
+    def _get_present_bitmap(self):
+        nodes = []
+        rev = []
+
+        path = "/sys/bus/i2c/devices/{0}/module_present_all"
+        cpld_i = self.get_cpld_num(self.port_start)
+        cpld_ps = self._cpld_mapping[cpld_i]
+        nodes.append(path.format(cpld_ps))
+        cpld_i = self.get_cpld_num(self.port_end)
+        cpld_ps = self._cpld_mapping[cpld_i]
+        nodes.append(path.format(cpld_ps))
+
+        bitmaps = 0
+        for node in nodes:
+            try:
+                reg_file = open(node)
+            except IOError as e:
+                print "Error: unable to open file: %s" % str(e)
+                return False
+            bitmap = reg_file.readline().rstrip()
+            bitmaps = bitmaps | int(bitmap, 16) 
+            reg_file.close()
+
+        return bitmaps
+
+    data = {'valid':0, 'last':0, 'present':0}
+    def get_transceiver_change_event(self, timeout=2000):
+        now = time.time()
+        port_dict = {}
+        port = 0
+
+        if timeout < 1000:
+            timeout = 1000
+        timeout = (timeout) / float(1000) # Convert to secs
+
+        if now < (self.data['last'] + timeout) and self.data['valid']:
+            return True, {}
+
+        reg_value = self._get_present_bitmap
+        changed_ports = self.data['present'] ^ reg_value
+        if changed_ports:
+            for port in range (self.port_start, self.port_end+1):
+                # Mask off the bit corresponding to our port
+                mask = (1 << (port - 1))
+                if changed_ports & mask:
+                    if (reg_value & mask) == 0:
+                        port_dict[port] = SFP_STATUS_REMOVED
+                    else:
+                        port_dict[port] = SFP_STATUS_INSERTED
+
+            # Update cache
+            self.data['present'] = reg_value
+            self.data['last'] = now
+            self.data['valid'] = 1
+            return True, port_dict
+        else:
+            return True, {}
+        return False, {}
+
