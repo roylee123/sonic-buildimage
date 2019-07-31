@@ -33,6 +33,7 @@
 #include <linux/stat.h>
 #include <linux/hwmon-sysfs.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 
 #define I2C_RW_RETRY_COUNT				10
 #define I2C_RW_RETRY_INTERVAL			60 /* ms */
@@ -584,7 +585,8 @@ static ssize_t show_present_all(struct device *dev, struct device_attribute *da,
              char *buf)
 {
 	int i, status;
-	u8 values[4]  = {0};
+	u64 value = 0;
+	u8 *values = (u8 *)&value;
 	u8 regs[] = {0x9, 0xA, 0xB, 0x18};
 	struct i2c_client *client = to_i2c_client(dev);
 	struct as7312_54x_cpld_data *data = i2c_get_clientdata(client);
@@ -603,16 +605,22 @@ static ssize_t show_present_all(struct device *dev, struct device_attribute *da,
 
 	mutex_unlock(&data->update_lock);
 
-    /* Return values 1 -> 54 in order */
-    if (data->type == as7312_54x_cpld2) {
-        values[3] &= 0xF;
-    }
-    else { /* as7312_54x_cpld3 */
-        values[3] &= 0x3;
-    }
 
-    return sprintf(buf, "%.2x %.2x %.2x %.2x\n",
-                        values[0], values[1], values[2], values[3]);
+    value = cpu_to_le64(value);
+
+    /* cpld2 has presence of port 1~24  and 49~52.*/
+    if (data->type == as7312_54x_cpld2) {
+        u64 tmp = (value >> 24) & 0xF; 
+        value &= 0xFFFFFF;
+        value |= tmp << 48;
+    }
+    else { /* cpld3 has presence of port 25~48  and 53~54.*/
+        u64 tmp = (value >> 24) & 0x3; 
+        value &= 0xFFFFFF;
+        value = value << 24;
+        value |= tmp << 52;
+    }
+    return sprintf(buf, "%llx\n", value);
 
 exit:
 	mutex_unlock(&data->update_lock);
@@ -660,55 +668,22 @@ static ssize_t show_status(struct device *dev, struct device_attribute *da,
 	u8 reg = 0, mask = 0, revert = 0;
 
 	switch (attr->index) {
-	case MODULE_PRESENT_1 ... MODULE_PRESENT_8:
-		reg  = 0x9;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_1);
+	case MODULE_PRESENT_1 ... MODULE_PRESENT_24:
+		reg  = 0x9 + ((attr->index - MODULE_PRESENT_1) / 8);
+		mask = 0x1 << ((attr->index - MODULE_PRESENT_1) % 8);
 		break;
-	case MODULE_PRESENT_9 ... MODULE_PRESENT_16:
-		reg  = 0xA;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_9);
+	case MODULE_PRESENT_25 ... MODULE_PRESENT_48:
+		reg  = 0x9 + ((attr->index - MODULE_PRESENT_25) / 8);
+		mask = 0x1 << ((attr->index - MODULE_PRESENT_25)% 8);
 		break;
-	case MODULE_PRESENT_17 ... MODULE_PRESENT_24:
-		reg  = 0xB;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_17);
-		break;
-	case MODULE_PRESENT_25 ... MODULE_PRESENT_32:
-		reg  = 0x9;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_25);
-		break;
-	case MODULE_PRESENT_33 ... MODULE_PRESENT_40:
-		reg  = 0xA;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_33);
-		break;
-	case MODULE_PRESENT_41 ... MODULE_PRESENT_48:
-		reg  = 0xB;
-		mask = 0x1 << (attr->index - MODULE_PRESENT_41);
-		break;
-    case MODULE_PRESENT_49:
+    case MODULE_PRESENT_49 ... MODULE_PRESENT_52:
         reg  = 0x18;
-        mask = 0x1;
+        mask = 0x1 << (attr->index - MODULE_PRESENT_49);
         break;
-    case MODULE_PRESENT_50:
+    case MODULE_PRESENT_53 ... MODULE_PRESENT_54:
         reg  = 0x18;
-        mask = 0x2;
+        mask = 0x1 << (attr->index - MODULE_PRESENT_53);
         break;
-    case MODULE_PRESENT_51:
-        reg  = 0x18;
-        mask = 0x4;
-        break;
-    case MODULE_PRESENT_52:
-        reg  = 0x18;
-        mask = 0x8;
-        break;
-    case MODULE_PRESENT_53:
-        reg  = 0x18;
-        mask = 0x1;
-        break;
-    case MODULE_PRESENT_54:
-        reg  = 0x18;
-        mask = 0x2;
-        break;
-
     case MODULE_RESET_49 ... MODULE_RESET_54:
         reg  = 0x17;
         mask = 1 << ((attr->index - MODULE_PRESENT_49)%4);
