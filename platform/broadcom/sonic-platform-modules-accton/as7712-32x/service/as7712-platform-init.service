@@ -5,11 +5,8 @@ After=sysinit.target
 DefaultDependencies=no
 
 [Service]
-Type=oneshot
 ExecStartPre=/usr/local/bin/accton_as7712_util.py install
 ExecStart=/usr/local/bin/accton_as7712_monitor.py
-KillSignal=SIGKILL
-RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
