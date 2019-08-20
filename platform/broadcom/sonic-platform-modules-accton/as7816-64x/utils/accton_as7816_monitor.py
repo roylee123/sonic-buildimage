@@ -31,6 +31,7 @@ try:
     import imp
     import logging
     import logging.config
+    import logging.handlers
     import types
     import time  # this is only being used as part of the example
     import traceback
@@ -48,7 +49,7 @@ DUTY_MAX = 100
 DUTY_DEF = 40
 
 global log_file
-global log_level
+global log_console
 
      
 # Make a class we can use to capture stdout and sterr in the log
@@ -58,26 +59,43 @@ class accton_as7816_monitor(object):
     _new_perc = 0
     _ori_perc = 0
 
-    def __init__(self, log_file, log_level):
+    llog = logging.getLogger("["+FUNCTION_NAME+"]")
+    def __init__(self, log_console, log_file):
         """Needs a logger and a logger level."""
-        # set up logging to file
-        logging.basicConfig(
-            filename=log_file,
-            filemode='w',
-            level=log_level,
-            format= '[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
-        )
+
+        formatter = logging.Formatter('%(name)s %(message)s')
+        sys_handler  = logging.handlers.SysLogHandler(address = '/dev/log')
+        sys_handler.setFormatter(formatter)
+        sys_handler.ident = 'common'
+        sys_handler.setLevel(logging.WARNING)  #only fatal for syslog
+        self.llog.addHandler(sys_handler)
+        self.llog.setLevel(logging.DEBUG)
+
+        if log_file:
+            fh = logging.FileHandler(log_file)
+            fh.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)-15s %(name)s %(message)s')
+            fh.setFormatter(formatter)
+            self.llog.addHandler(fh)
 
         # set up logging to console
-        if log_level == logging.DEBUG:
+        if log_console:
             console = logging.StreamHandler()
-            console.setLevel(log_level)
-            formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+            console.setLevel(logging.DEBUG)     #For debugging
+            formatter = logging.Formatter('%(asctime)-15s %(name)s %(message)s')
             console.setFormatter(formatter)
-            logging.getLogger('').addHandler(console)
+            self.llog.addHandler(console)
 
-        logging.debug('SET. logfile:%s / loglevel:%d', log_file, log_level)
+
+    def shutdown(self):
+        cmd = 'i2cset -y -f 14 0x25 0x11 0x08'
+        subprocess.call(cmd, shell=True)
+
+    def manage_thermal(self):
+        thermal = ThermalUtil()
+        temp_4a = thermal._get_thermal_node_val(3)            
+        if temp_4a >= 70000:
+            self.shutdown()
 
     def manage_fans(self):
         max_duty = DUTY_MAX
@@ -94,13 +112,12 @@ class accton_as7816_monitor(object):
         for x in range(fan.get_idx_fan_start(), fan.get_num_fans()+1):
             fan_status = fan.get_fan_status(x)
             if fan_status is None:
-                logging.debug('INFO. SET new_perc to %d (FAN stauts is None. fan_num:%d)', max_duty, x)
+                self.llog.error('INFO. SET new_perc to %d (FAN stauts is None. fan_num:%d)', max_duty, x)
                 return False
             if fan_status is False:             
-                logging.debug('INFO. SET new_perc to %d (FAN fault. fan_num:%d)', max_duty, x)
+                self.llog.warning('INFO. SET new_perc to %d (FAN fault. fan_num:%d)', max_duty, x)
                 fan.set_fan_duty_cycle(max_duty)
                 return True
-            #logging.debug('INFO. fan_status is True (fan_num:%d)', x)
  
         #Find if current duty matched any of define duty. 
 	#If not, set it to highest one.
@@ -119,45 +136,51 @@ class accton_as7816_monitor(object):
             y = len(fan_policy) - x -1 #checked from highest
             if get_temp > fan_policy[y][1] and get_temp < fan_policy[y][2] :
                 new_duty_cycle = fan_policy[y][0]
-                logging.debug('INFO. Sum of temp %d > %d , new_duty_cycle=%d', get_temp, fan_policy[y][1], new_duty_cycle)
+                self.llog.debug('INFO. Sum of temp %d > %d , new_duty_cycle=%d', get_temp, fan_policy[y][1], new_duty_cycle)
 
-        logging.debug('INFO. Final duty_cycle=%d', new_duty_cycle)
+        self.llog.debug('INFO. Final duty_cycle=%d', new_duty_cycle)
         if(new_duty_cycle != cur_duty_cycle):
             fan.set_fan_duty_cycle(new_duty_cycle)
         return True
 
-def handler(signum, frame):
+def sig_handler(signum, frame):
     fan = FanUtil()
-    logging.debug('INFO:Cause signal %d, set fan speed max.', signum)
+    self.llog.debug('INFO:Cause signal %d, set fan speed max.', signum)
     fan.set_fan_duty_cycle(DUTY_MAX)
     sys.exit(0)
 
 def main(argv):
     log_file = '%s.log' % FUNCTION_NAME
-    log_level = logging.INFO
+    log_console = 0
+    log_file = ""
+
     if len(sys.argv) != 1:
         try:
-            opts, args = getopt.getopt(argv,'hdl:',['lfile='])
+            opts, args = getopt.getopt(argv,'hdl')
         except getopt.GetoptError:
-            print 'Usage: %s [-d] [-l <log_file>]' % sys.argv[0]
+            print 'Usage: %s [-d] [-l]' % sys.argv[0]
             return 0
         for opt, arg in opts:
             if opt == '-h':
-                print 'Usage: %s [-d] [-l <log_file>]' % sys.argv[0]
+                print 'Usage: %s [-d] [-l]' % sys.argv[0]
                 return 0
-            elif opt in ('-d', '--debug'):
-                log_level = logging.DEBUG
-            elif opt in ('-l', '--lfile'):
-                log_file = arg
+            elif opt in ('-d'):
+                log_console = 1
+            elif opt in ('-l'):
+                log_file = '%s.log' % sys.argv[0]
 
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-    monitor = accton_as7816_monitor(log_file, log_level)
+    signal.signal(signal.SIGINT, sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
 
+    monitor = accton_as7816_monitor(log_console, log_file)
     # Loop forever, doing something useful hopefully:
+    acc = 0
     while True:
-        monitor.manage_fans()
-        time.sleep(10)
+        time.sleep(2)
+        monitor.manage_thermal()
+        if (acc % 5) == 0 :
+            monitor.manage_fans()
+        acc = acc + 1
 
 if __name__ == '__main__':
     main(sys.argv[1:])

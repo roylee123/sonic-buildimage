@@ -142,9 +142,13 @@ class FanUtil(object):
 
         return True
 
-    def __init__(self):
-        fan_path = self.BASE_VAL_PATH 
+    logger = logging.getLogger(__name__)
+    def __init__(self, log_level=logging.DEBUG):
+        ch = logging.StreamHandler()
+        ch.setLevel(log_level)
+        self.logger.addHandler(ch)
 
+        fan_path = self.BASE_VAL_PATH 
         for fan_num in range(self.FAN_NUM_1_IDX, self.FAN_NUM_ON_MAIN_BROAD+1):
             for node_num in range(self.FAN_NODE_FAULT_IDX_OF_MAP, self.FAN_NODE_NUM_OF_MAP+1):
                 self._fan_to_device_path_mapping[(fan_num, node_num)] = fan_path.format(
@@ -218,15 +222,15 @@ class FanUtil(object):
 
     def get_fan_status(self, fan_num):
         if fan_num < self.FAN_NUM_1_IDX or fan_num > self.FAN_NUM_ON_MAIN_BROAD:
-            logging.debug('GET. Parameter error. fan_num, %d', fan_num)
+            self.logger.debug('GET. Parameter error. fan_num, %d', fan_num)
             return None
 
         if self.get_fan_fault(fan_num) is not None and self.get_fan_fault(fan_num) > 0:
-            logging.debug('GET. FAN fault. fan_num, %d', fan_num)
+            self.logger.debug('GET. FAN fault. fan_num, %d', fan_num)
             return False
 
         #if self.get_fanr_fault(fan_num) is not None and self.get_fanr_fault(fan_num) > 0:
-        #    logging.debug('GET. FANR fault. fan_num, %d', fan_num)
+        #    self.logger.debug('GET. FANR fault. fan_num, %d', fan_num)
         #   return False
 
         return True
