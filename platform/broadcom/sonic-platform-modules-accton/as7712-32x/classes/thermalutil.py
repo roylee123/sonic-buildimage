@@ -47,9 +47,9 @@ class ThermalUtil(object):
     _thermal_to_device_path_mapping = {}
 
     _thermal_to_device_node_mapping = {
-            THERMAL_NUM_1_IDX: ['10', '48'],
-            THERMAL_NUM_2_IDX: ['10', '49'],
-            THERMAL_NUM_3_IDX: ['10', '4a'],
+            THERMAL_NUM_1_IDX: ['3', '48'],
+            THERMAL_NUM_2_IDX: ['3', '49'],
+            THERMAL_NUM_3_IDX: ['3', '4a'],
            }
 
     logger = logging.getLogger(__name__)
