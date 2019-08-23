@@ -31,6 +31,7 @@ try:
     import logging.config
     import logging.handlers
     import types
+    import signal
     import time  # this is only being used as part of the example
     import traceback
     from tabulate import tabulate
@@ -42,6 +43,7 @@ except ImportError as e:
 # Deafults
 VERSION = '1.0'
 FUNCTION_NAME = 'accton_as7712_monitor'
+DUTY_MAX = 100
 
 global log_file
 global log_console
@@ -106,7 +108,7 @@ class accton_as7712_monitor(object):
             self.llog.addHandler(fh)
 
         # set up logging to console
-        if log_level:
+        if log_console:
             console = logging.StreamHandler()
             console.setLevel(logging.DEBUG)     #For debugging
             formatter = logging.Formatter('%(asctime)-15s %(name)s %(message)s')
@@ -124,7 +126,7 @@ class accton_as7712_monitor(object):
            0: [32, 0,      140000],
            1: [38, 135000, 150000],
            2: [50, 145000, 160000],
-           3: [69, 15500, 0],
+           3: [69, 155000, 0],
         }
   
         thermal = ThermalUtil()
@@ -136,85 +138,81 @@ class accton_as7712_monitor(object):
         for x in range(fan.get_idx_fan_start(), fan.get_num_fans()+1):
             fan_status = fan.get_fan_status(x)
             if fan_status is None:
-                self.llog.warning('SET new_perc to %d (FAN stauts is None. fan_num:%d)', 100, x)
+                self.llog.warning('SET new_perc to %d (FAN stauts is None. fan_num:%d)', DUTY_MAX, x)
+                fan.set_fan_duty_cycle(DUTY_MAX)
                 return False
             if fan_status is False:             
-                self.llog.warning('SET new_perc to %d (FAN fault. fan_num:%d)', 100, x)
-                fan.set_fan_duty_cycle(45)
+                self.llog.warning('SET new_perc to %d (FAN fault. fan_num:%d)', DUTY_MAX, x)
+                fan.set_fan_duty_cycle(DUTY_MAX)
                 return True
             self.llog.debug('INFO. fan_status is True (fan_num:%d)', x)
         
         if fan_status is not None and fan_status is not False:
             fan_dir=fan.get_fan_dir(1)
+            if fan_dir == 1:
+                policy = fan_policy_f2b
+            else:
+                policy = fan_policy_b2f
+            new_duty_cycle = cur_duty_cycle
+
             for x in range(0, 4):
                 if cur_duty_cycle == fan_policy_f2b[x][0]:
                     break
-           
-            if fan_dir == 1:
                 if x == 4 :
-                    fan.set_fan_duty_cycle(fan_policy_f2b[0][0])                
-                new_duty_cycle=cur_duty_cycle
+                    fan.set_fan_duty_cycle(policy[0][0])                
+                    break
                 # if temp > up_levle, else if temp < down_level
-                if get_temp > fan_policy_f2b[x][2] and x != 3 :
-                    new_duty_cycle= fan_policy_f2b[x+1][0]
-                    self.llog.debug('THERMAL temp UP, temp %d > %d , new_duty_cycle=%d', get_temp, fan_policy_f2b[x][2], new_duty_cycle)
-                elif get_temp < fan_policy_f2b[x][1] :
-                    new_duty_cycle= fan_policy_f2b[x-1][0]
-                    self.llog.debug('THERMAL temp down, temp %d < %d , new_duty_cycle=%d', get_temp, fan_policy_f2b[x][1], new_duty_cycle)
-                if new_duty_cycle == cur_duty_cycle :
-                    return True
-            else:
-                if x == 4 :
-                    fan.set_fan_duty_cycle(fan_policy_b2f[0][0])                
-                new_duty_cycle=cur_duty_cycle
-                # if temp > up_levle, else if temp < down_level
-                if get_temp > fan_policy_b2f[x][1] and x != 3 :
-                    new_duty_cycle= fan_policy_b2f[x+1][0]
-                    self.llog.debug('THERMAL temp UP, temp %d > %d , new_duty_cycle=%d', get_temp, fan_policy_b2f[x][2], new_duty_cycle)
-                elif get_temp < fan_policy_b2f[x][0] and x != 0 :
-                    new_duty_cycle= fan_policy_b2f[x-1][0]
-                    self.llog.debug('THERMAL temp down, temp %d < %d , new_duty_cycle=%d', get_temp, fan_policy_b2f[x][1], new_duty_cycle)                
-                if new_duty_cycle == cur_duty_cycle :
-                    return True  
-                
-            fan.set_fan_duty_cycle(new_duty_cycle)
+                if get_temp > policy[x][2] and x != 3 :
+                    new_duty_cycle= policy[x+1][0]
+                    self.llog.debug('THERMAL temp UP, temp %d > %d , new_duty_cycle=%d', get_temp, policy[x][2], new_duty_cycle)
+                elif get_temp < policy[x][1] :
+                    new_duty_cycle= policy[x-1][0]
+                    self.llog.debug('THERMAL temp down, temp %d < %d , new_duty_cycle=%d', get_temp, policy[x][1], new_duty_cycle)
+                    break;
+
+            if new_duty_cycle == cur_duty_cycle :
+                return True
+            else:    
+                self.llog.debug('set new_duty_cycle=%d',new_duty_cycle)
+                fan.set_fan_duty_cycle(new_duty_cycle)
            
             return True
          
 def sig_handler(signum, frame):
     fan = FanUtil()
-    self.llog.error('INFO:Cause signal %d, set fan speed max.', signum)
+    logging.critical('INFO:Cause signal %d, set fan speed max.', signum)
     fan.set_fan_duty_cycle(DUTY_MAX)
     sys.exit(0)
 
 
 def main(argv):
     log_file = '%s.log' % FUNCTION_NAME
-    log_level = logging.INFO
+    log_console = 0
+    log_file = ""
+
     if len(sys.argv) != 1:
         try:
-            opts, args = getopt.getopt(argv,'hdl:',['lfile='])
+            opts, args = getopt.getopt(argv,'hdl')
         except getopt.GetoptError:
-            print 'Usage: %s [-d] [-l <log_file>]' % sys.argv[0]
+            print 'Usage: %s [-d] [-l]' % sys.argv[0]
             return 0
         for opt, arg in opts:
             if opt == '-h':
-                print 'Usage: %s [-d] [-l <log_file>]' % sys.argv[0]
+                print 'Usage: %s [-d] [-l]' % sys.argv[0]
                 return 0
-            elif opt in ('-d', '--debug'):
-                log_level = logging.DEBUG
-            elif opt in ('-l', '--lfile'):
-                log_file = arg
+            elif opt in ('-d'):
+                log_console = 1
+            elif opt in ('-l'):
+                log_file = '%s.log' % sys.argv[0]
 
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
 
-    monitor = accton_as7712_monitor(log_file, log_level)
-
+    monitor = accton_as7712_monitor(log_console, log_file)
     # Loop forever, doing something useful hopefully:
     while True:
         monitor.manage_fans()
-        time.sleep(1)
+        time.sleep(10)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

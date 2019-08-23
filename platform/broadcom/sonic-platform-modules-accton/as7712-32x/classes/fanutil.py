@@ -100,7 +100,7 @@ class FanUtil(object):
         try:
             val_file = open(device_path, 'r')
         except IOError as e:
-            self.logger.error('GET. unable to open file: %s', str(e))
+            #self.logger.error('GET. unable to open file: %s', str(e))
             return None
 
         content = val_file.readline().rstrip()
